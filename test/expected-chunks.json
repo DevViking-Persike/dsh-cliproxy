@@ -1,0 +1,216 @@
+{
+ "texto simples": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "text"
+  },
+  {
+   "type": "text-delta",
+   "index": 0,
+   "text": "Hel"
+  },
+  {
+   "type": "text-delta",
+   "index": 0,
+   "text": "lo"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "text",
+    "text": "Hello"
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "stop"
+   }
+  }
+ ],
+ "reasoning vazio nao abre bloco": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "text"
+  },
+  {
+   "type": "text-delta",
+   "index": 0,
+   "text": "x"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "text",
+    "text": "x"
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "stop"
+   }
+  }
+ ],
+ "reasoning antes de texto": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "reasoning"
+  },
+  {
+   "type": "reasoning-delta",
+   "index": 0,
+   "text": "pensando"
+  },
+  {
+   "type": "block-start",
+   "index": 1,
+   "blockType": "text"
+  },
+  {
+   "type": "text-delta",
+   "index": 1,
+   "text": "resposta"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "reasoning",
+    "text": "pensando"
+   }
+  },
+  {
+   "type": "block-end",
+   "index": 1,
+   "block": {
+    "type": "text",
+    "text": "resposta"
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "stop"
+   }
+  }
+ ],
+ "tool call fragmentado": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "tool-call"
+  },
+  {
+   "type": "tool-call-delta",
+   "index": 0,
+   "id": "c1",
+   "name": "f",
+   "argumentsDelta": "{\"a\":"
+  },
+  {
+   "type": "tool-call-delta",
+   "index": 0,
+   "id": "c1",
+   "name": "f",
+   "argumentsDelta": "1}"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "tool-call",
+    "id": "c1",
+    "name": "f",
+    "arguments": "{\"a\":1}"
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "tool-calls"
+   }
+  }
+ ],
+ "usage disjunto": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "text"
+  },
+  {
+   "type": "text-delta",
+   "index": 0,
+   "text": "x"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "text",
+    "text": "x"
+   }
+  },
+  {
+   "type": "usage",
+   "usage": {
+    "inputTokens": 60,
+    "outputTokens": 10,
+    "cacheReadTokens": 40
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "stop"
+   }
+  }
+ ],
+ "sem conteudo vira EMPTY_RESPONSE": [
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "error",
+    "failure": {
+     "message": "model returned a completed response with no content",
+     "code": "EMPTY_RESPONSE"
+    }
+   }
+  }
+ ],
+ "content_filter": [
+  {
+   "type": "block-start",
+   "index": 0,
+   "blockType": "text"
+  },
+  {
+   "type": "text-delta",
+   "index": 0,
+   "text": "x"
+  },
+  {
+   "type": "block-end",
+   "index": 0,
+   "block": {
+    "type": "text",
+    "text": "x"
+   }
+  },
+  {
+   "type": "finish",
+   "reason": {
+    "kind": "error",
+    "failure": {
+     "message": "model stopped: content_filter",
+     "code": "CONTENT_FILTER"
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "dsh-cliproxy",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: routes cliproxy-claude and cliproxy-openai through a local CLIProxyAPI instance, so the agent reaches your own CLI subscriptions",
+  "license": "MIT",
+  "main": "dsh/index.js",
+  "exports": {
+    ".": "./dsh/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dsh/**",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "dependencies": {
+    "eventsource-parser": "^3.1.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "llm",
+    "cliproxyapi",
+    "claude",
+    "openai"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DevViking-Persike/dsh-cliproxy.git"
+  }
+}

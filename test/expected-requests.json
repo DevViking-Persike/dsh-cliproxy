@@ -1,0 +1,113 @@
+{
+ "texto simples": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "user",
+    "content": "oi"
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "max_tokens": 4096
+ },
+ "com system": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "system",
+    "content": "seja breve"
+   },
+   {
+    "role": "user",
+    "content": "oi"
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "max_tokens": 4096
+ },
+ "assistant sem texto": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+     {
+      "id": "c1",
+      "type": "function",
+      "function": {
+       "name": "f",
+       "arguments": "{}"
+      }
+     }
+    ]
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "max_tokens": 4096
+ },
+ "tool result vazio": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "tool",
+    "tool_call_id": "c1",
+    "content": "(no output)"
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "max_tokens": 4096
+ },
+ "com ferramentas": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "f",
+     "description": "d",
+     "parameters": {
+      "type": "object"
+     }
+    }
+   }
+  ],
+  "max_tokens": 4096
+ },
+ "maxTokens explicito": {
+  "model": "m",
+  "messages": [
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "stream": true,
+  "stream_options": {
+   "include_usage": true
+  },
+  "max_tokens": 99
+ }
+}
