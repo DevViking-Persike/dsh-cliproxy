@@ -1,6 +1,14 @@
 # dsh-cliproxy
 
-Routes `cliproxy-claude` and `cliproxy-openai` in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) through one local [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance, so the agent reaches your own CLI subscriptions over an OpenAI-compatible endpoint.
+Routes Claude, OpenAI/Codex, and **Gemini through Antigravity OAuth** in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) through one local [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance.
+
+The Gemini route uses your Google/Antigravity account — **not a Gemini API key**. CLIProxyAPI owns the browser login, refresh token, Google project, native request fingerprint, and translation; this plugin is its OpenAI-compatible DSH client.
+
+| DSH provider | Authentication owned by CLIProxyAPI |
+|---|---|
+| `cliproxy-claude` | Claude Code subscription |
+| `cliproxy-openai` | Codex/OpenAI subscription |
+| `cliproxy-gemini` | Google Antigravity OAuth |
 
 ## Install
 
@@ -8,14 +16,25 @@ Routes `cliproxy-claude` and `cliproxy-openai` in [DeepSeek Harness](https://git
 dsh plugin --profile web add github:DevViking-Persike/dsh-cliproxy
 ```
 
-Restart `dsh`. Both routes appear in the model catalog once a key is available.
+Restart DSH. All three routes then appear in the model catalog.
+
+## Gemini / Antigravity Login
+
+CLIProxyAPI 7.x already implements the public Antigravity OAuth client. Run this once:
+
+```bash
+cliproxyapi -config /opt/homebrew/etc/cliproxyapi.conf -antigravity-login
+```
+
+Authorize the Google account in the browser. CLIProxyAPI writes `antigravity-<email>.json` under its configured `auth-dir` (normally `~/.cli-proxy-api`) and refreshes it itself. This DSH plugin never reads the Google access or refresh tokens.
+
+The key named below is only the local proxy's access control between DSH and `127.0.0.1:8317`; it is **not** a Gemini API key. For a loopback endpoint, the plugin reads the first `api-keys` entry from the local CLIProxyAPI config by default, so no environment variable is required and the key is never displayed.
 
 ## Requirements
 
-- A running CLIProxyAPI instance. The default endpoint is `http://127.0.0.1:8317/v1`.
-- The proxy's API key, read per request from `CLIPROXY_API_KEY` — through the harness credential store when one is mounted, otherwise from the environment.
-
-Without a key the routes still mount; each model call fails with `MISSING_CREDENTIAL` naming the variable to set. That is deliberate: a credential is not a load-time fact, and a rotated key must take effect on the next call rather than at the next restart.
+- A running CLIProxyAPI instance; default endpoint `http://127.0.0.1:8317/v1`.
+- For Gemini, a completed `-antigravity-login`.
+- Either a proxy access key in the harness credential store / `CLIPROXY_API_KEY`, or a readable local proxy config. Local config discovery is allowed only for loopback URLs; a local key is never sent to a remote endpoint implicitly.
 
 ## Configuration
 
@@ -23,52 +42,63 @@ Every field is optional.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `baseURL` | `http://127.0.0.1:8317/v1` | Endpoint including the `/v1` prefix. |
-| `apiKeyEnv` | `CLIPROXY_API_KEY` | Credential reference and environment variable holding the proxy key. |
-| `claudeModels` | six Claude entries | Catalog for `cliproxy-claude`. A supplied array **replaces** the default. |
+| `baseURL` | `http://127.0.0.1:8317/v1` | Endpoint including `/v1`. |
+| `apiKeyEnv` | `CLIPROXY_API_KEY` | Optional credential reference/environment variable for the proxy access key. |
+| `proxyConfigPath` | `/opt/homebrew/etc/cliproxyapi.conf` | Local CLIProxyAPI YAML from which the first proxy access key may be read. |
+| `readLocalProxyKey` | `true` | Allow local config discovery for loopback endpoints only. |
+| `claudeModels` | six Claude entries | Catalog for `cliproxy-claude`; a supplied array replaces the default. |
 | `openaiModels` | five GPT entries | Catalog for `cliproxy-openai`. |
-| `streamIdleTimeoutMs` | `300000` | Budget between reads before the transport gives up. |
-| `defaultContextWindow` | `200000` | Context assumed for a model absent from the catalog. |
-| `maxTokens` | `32000` | Output cap when neither request nor catalog states one. |
-| `retryPolicy` | normal, 3 retries | Merged over the default; read field by field by the harness retry plugin. |
+| `geminiModels` | eight Gemini entries | Antigravity catalog for `cliproxy-gemini`. |
+| `streamIdleTimeoutMs` | `300000` | Budget between stream reads. |
+| `defaultContextWindow` | `200000` | Context assumed for an uncatalogued model. |
+| `maxTokens` | `32000` | Default output cap. |
+| `retryPolicy` | normal, 3 retries | Merged over the harness-compatible default. |
 
 ```yaml
 - id: dsh-cliproxy
-  name: 'dsh-cliproxy'
+  name: dsh-cliproxy
   config:
     baseURL: http://127.0.0.1:8317/v1
-    claudeModels:
-      - id: claude-opus-5
-        name: Claude Opus 5
-        contextWindow: 1000000
-        maxTokens: 128000
+    geminiModels:
+      - id: gemini-pro-agent
+        name: Gemini 3.1 Pro High
+        contextWindow: 1048576
+        maxTokens: 65535
 ```
 
-A supplied catalog replaces rather than merges: naming three models means those three, and merging would silently reintroduce models your proxy does not serve.
+## Why the Proxy Owns Antigravity
+
+A direct client is significantly more than an OAuth bearer token. The upstream wire requires:
+
+- Google OAuth scopes and the registered Antigravity public client;
+- project discovery/onboarding through `loadCodeAssist`;
+- `daily-cloudcode-pa.googleapis.com` / `cloudcode-pa.googleapis.com` routing;
+- an `antigravity/hub/<version>` user agent and HTTP/1.1 fingerprint;
+- a Gemini body nested inside an Antigravity envelope with project, request, and session ids;
+- tool-schema sanitization, encrypted reasoning replay, model-specific output caps, and token refresh.
+
+CLIProxyAPI already owns and tests those facts. Duplicating them here would produce two token writers and a second independently drifting protocol implementation. This plugin therefore sends OpenAI-compatible streaming requests to the loopback proxy and never copies Google's client secret or account tokens.
 
 ## Model Experience
 
-The adapter is transparent to the model: it registers provider routes and streams responses, adding no tool, prompt section, or context.
+The adapter is transparent to the model: it registers provider routes and streams responses, adding no tool, prompt section, or context. Usage counts are disjoint — `inputTokens` excludes cache reads already counted inside `prompt_tokens`.
 
-What it does affect is accounting. Usage counts are reported **disjoint** — `inputTokens` excludes cache reads, which the wire reports inside `prompt_tokens`. Passing the raw number through would double-count every cache hit in the cost display.
-
-Text only. Image content is refused before any request is sent, because the serialization path would otherwise drop it and the model would answer a question it never saw.
+Text only. Image, audio, and video are refused before a request is sent, although some Antigravity models support them upstream; this adapter's serializer does not yet preserve those inputs.
 
 ## Safety
 
-- The key is read per request and never enters an error message; a key that cannot be sent as a header names the *reference*, not the value.
-- A truncated stream raises `STREAM_CLOSED` rather than presenting as a normal finish, so a cut-off response is never mistaken for a complete one.
-- A `400` whose message names the context window is reported as `CONTEXT_WINDOW_EXCEEDED`, not `INVALID_REQUEST` — the caller can recover from one by compacting and not from the other.
-- A provider's `retry-after` is carried through to the harness retry plugin, so backoff follows the provider's schedule instead of a local guess.
-- The idle budget covers silence from the server, not deliberation by the consumer: the timer runs only while a read is outstanding, so a slow reader never trips it.
+- Google access/refresh tokens remain entirely inside CLIProxyAPI's `auth-dir`.
+- The proxy access key is read per request and never enters an error or log. Local-config discovery is disabled automatically for non-loopback destinations.
+- A truncated stream raises `STREAM_CLOSED` instead of looking complete.
+- `retry-after` reaches the harness retry plugin; idle timeout measures server silence, never a slow consumer.
+- Chunk fields are checked at load against a fixed payload, so harness protocol drift refuses to mount instead of corrupting tool calls silently.
 
-## Known Limitations and Deferred Work
+## Known Limitations
 
-- **Version-sensitive by construction.** This plugin lives outside the harness repository, which states it makes no compatibility promise before its first release. The chunk vocabulary it emits is therefore verified at load against a fixed payload, and a mismatch refuses to mount with a message naming the drifted field — a renamed field would otherwise corrupt output with nothing reported.
-- No image or audio input. The endpoint may accept them; this adapter does not serialize them.
-- No `registerConfigurableProviders` entry, so the routes do not appear in the settings-driven provider directory. That directory requires a settings namespace whose section configures the route, and this plugin is configured from `cordis.yml` instead.
-- Model catalogs are static configuration, not discovered from the proxy. `listModels` reports what is configured; a model your proxy serves but the catalog omits still works when named explicitly, resolving with the default context window.
-- The test suite runs entirely against a local `node:http` server. It proves this plugin's behavior, not that CLIProxyAPI speaks exactly this dialect — the fixtures encode the harness's belief about the wire, recorded from its own implementation.
+- Model catalogs are static defaults copied from CLIProxyAPI's Antigravity registry; an uncatalogued model still resolves when named explicitly. Supplying `geminiModels` replaces the defaults.
+- No image/audio/video serialization yet.
+- The plugin has no settings-directory entry; it is configured by `cordis.yml`.
+- Tests use local HTTP servers and recorded harness translator/serializer output. Real OAuth and model availability remain vendor-controlled.
 
 ## Tests
 
@@ -76,7 +106,7 @@ Text only. Image content is refused before any request is sent, because the seri
 npm install && node --test test/*.test.js
 ```
 
-59 tests, no network and no key required. The translator and serializer fixtures are **recorded output from the harness's own implementations**, so a divergence between this port and the reference fails the suite rather than reaching a model call.
+64 tests, no network and no credential required.
 
 ## License
 

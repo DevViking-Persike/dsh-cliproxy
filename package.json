@@ -1,7 +1,7 @@
 {
   "name": "dsh-cliproxy",
   "version": "0.1.0",
-  "description": "DeepSeek Harness plugin: routes cliproxy-claude and cliproxy-openai through a local CLIProxyAPI instance, so the agent reaches your own CLI subscriptions",
+  "description": "DeepSeek Harness plugin: Claude, Codex, and Gemini via Antigravity OAuth through a local CLIProxyAPI instance",
   "license": "MIT",
   "main": "dsh/index.js",
   "exports": {
@@ -30,7 +30,10 @@
     "llm",
     "cliproxyapi",
     "claude",
-    "openai"
+    "openai",
+    "gemini",
+    "antigravity",
+    "oauth"
   ],
   "repository": {
     "type": "git",

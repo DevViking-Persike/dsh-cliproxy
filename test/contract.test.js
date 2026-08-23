@@ -81,7 +81,7 @@ test('an uncatalogued model resolves as text-only', async () => {
   assert.equal(resolved.context.contextWindow, config.defaultContextWindow)
 })
 
-test('the plugin registers both routes through an effect, and unload removes them', async () => {
+test('the plugin registers all three routes through an effect, and unload removes them', async () => {
   const registered = []
   let disposer
   const ctx = {
@@ -96,7 +96,7 @@ test('the plugin registers both routes through an effect, and unload removes the
   }
 
   await plugin.apply(ctx, {})
-  assert.deepEqual(registered, ['cliproxy-claude', 'cliproxy-openai'])
+  assert.deepEqual(registered, ['cliproxy-claude', 'cliproxy-openai', 'cliproxy-gemini'])
 
   disposer()
   assert.deepEqual(registered, [])

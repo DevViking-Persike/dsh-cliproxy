@@ -33,6 +33,18 @@ const DEFAULT_OPENAI_MODELS = [
   { id: 'gpt-5.3-codex-spark', name: 'GPT-5.3 Codex Spark (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
 ]
 
+/** Gemini models Antigravity exposes through CLIProxyAPI. */
+const DEFAULT_GEMINI_MODELS = [
+  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
+  { id: 'gemini-3.6-flash-high', name: 'Gemini 3.6 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
+  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
+  { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro Low (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
+  { id: 'gemini-3-flash-agent', name: 'Gemini 3.5 Flash High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
+  { id: 'gemini-3.5-flash-low', name: 'Gemini 3.5 Flash Medium (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
+]
+
 /** The default retry policy, matching the harness's own normal-mode defaults. */
 const DEFAULT_RETRY_POLICY = {
   mode: 'normal',
@@ -112,6 +124,8 @@ function resolveConfig(raw = {}) {
   return Object.freeze({
     baseURL,
     apiKeyEnv: raw.apiKeyEnv ?? 'CLIPROXY_API_KEY',
+    proxyConfigPath: raw.proxyConfigPath ?? '/opt/homebrew/etc/cliproxyapi.conf',
+    readLocalProxyKey: raw.readLocalProxyKey ?? true,
     streamIdleTimeoutMs: positiveInteger(raw.streamIdleTimeoutMs, 'streamIdleTimeoutMs', DEFAULT_STREAM_IDLE_TIMEOUT_MS),
     defaultContextWindow: positiveInteger(raw.defaultContextWindow, 'defaultContextWindow', DEFAULT_CONTEXT_WINDOW),
     maxTokens: positiveInteger(raw.maxTokens, 'maxTokens', DEFAULT_MAX_TOKENS),
@@ -127,6 +141,11 @@ function resolveConfig(raw = {}) {
         displayName: 'CLIProxyAPI (OpenAI)',
         models: Object.freeze(catalog(raw.openaiModels, 'openaiModels', DEFAULT_OPENAI_MODELS)),
       }),
+      Object.freeze({
+        provider: 'cliproxy-gemini',
+        displayName: 'Gemini (Antigravity subscription)',
+        models: Object.freeze(catalog(raw.geminiModels, 'geminiModels', DEFAULT_GEMINI_MODELS)),
+      }),
     ]),
   })
 }
@@ -134,6 +153,7 @@ function resolveConfig(raw = {}) {
 module.exports = {
   DEFAULT_CLAUDE_MODELS,
   DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_GEMINI_MODELS,
   DEFAULT_MAX_TOKENS,
   DEFAULT_OPENAI_MODELS,
   DEFAULT_RETRY_POLICY,

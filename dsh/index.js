@@ -1,7 +1,7 @@
-// dsh-cliproxy — DeepSeek Harness plugin: routes `cliproxy-claude` and
-// `cliproxy-openai` through one local CLIProxyAPI instance, so the agent
-// reaches the operator's own CLI subscriptions over an OpenAI-compatible
-// endpoint.
+// dsh-cliproxy — DeepSeek Harness plugin: routes `cliproxy-claude`,
+// `cliproxy-openai`, and `cliproxy-gemini` through one local CLIProxyAPI
+// instance. The Gemini route uses the operator's Google Antigravity OAuth
+// account; CLIProxyAPI owns those tokens and this plugin never reads them.
 //
 // Plain JavaScript with no build step and no dependency on any harness
 // package: the adapter is a plain object, because `registerAdapter` validates
@@ -11,6 +11,7 @@
 // a rotated key reaches the next call without a restart, while an in-flight
 // stream keeps what it started with.
 
+const { readFile } = require('node:fs/promises')
 const { createAdapter } = require('./adapter.js')
 const { resolveConfig } = require('./config.js')
 const { CliProxyError } = require('./errors.js')
@@ -92,13 +93,52 @@ async function readApiKey(ctx, config) {
   }
   const environment = ctx.get('launchEnvironment')?.env ?? process.env
   const value = environment[config.apiKeyEnv]
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new CliProxyError(
-      `no CLIProxyAPI key: set ${config.apiKeyEnv} in the environment or the credential store`,
-      'MISSING_CREDENTIAL',
-    )
+  if (typeof value === 'string' && value.trim().length > 0) return assertUsable(value, config)
+
+  // A loopback proxy already owns an access key in its local config. Reading
+  // that key is safe only when the destination is loopback: against a remote
+  // URL, silently reusing a local key would send it to another machine. The
+  // parser accepts only the ordinary YAML list form used by CLIProxyAPI and
+  // never includes the key text in an error.
+  const host = new URL(config.baseURL).hostname
+  const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1'
+  if (config.readLocalProxyKey && loopback) {
+    const local = await readFirstApiKey(config.proxyConfigPath)
+    if (local !== undefined) return assertUsable(local, config)
   }
-  return assertUsable(value, config)
+
+  throw new CliProxyError(
+    `no CLIProxyAPI access key: set ${config.apiKeyEnv}, use the credential store, or configure proxyConfigPath for the local proxy`,
+    'MISSING_CREDENTIAL',
+  )
+}
+
+/**
+ * Read the first CLIProxyAPI access key from its local YAML config.
+ *
+ * The parser deliberately recognizes only the documented block-list form and
+ * returns no other config value. A missing or unreadable file falls through to
+ * the ordinary missing-credential error without exposing its contents.
+ *
+ * @param {string} filename - CLIProxyAPI config path.
+ * @returns {Promise<string|undefined>} one access key, when configured.
+ */
+async function readFirstApiKey(filename) {
+  let text
+  try {
+    text = await readFile(filename, 'utf8')
+  } catch {
+    return undefined
+  }
+  const lines = text.split(/\r?\n/)
+  const start = lines.findIndex(line => /^api-keys:\s*(?:#.*)?$/.test(line))
+  if (start < 0) return undefined
+  for (const line of lines.slice(start + 1)) {
+    if (/^[^\s#]/.test(line)) break
+    const match = line.match(/^\s+-\s*["']?([^"'#\s]+)["']?\s*(?:#.*)?$/)
+    if (match !== null && match[1].length > 0) return match[1]
+  }
+  return undefined
 }
 
 /**
@@ -144,3 +184,5 @@ module.exports = {
     )
   },
 }
+
+module.exports.readFirstApiKey = readFirstApiKey
