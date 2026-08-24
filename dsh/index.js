@@ -176,6 +176,10 @@ module.exports = {
     const adapter = createAdapter({
       config,
       resolveApiKey: () => readApiKey(ctx, config),
+      // Optional and resolved per request: a deployment without the attachment
+      // service still serves every text route, and mounting that service later
+      // starts image input without a restart.
+      resolveAttachments: () => ctx.get('attachments'),
     })
 
     ctx.effect(

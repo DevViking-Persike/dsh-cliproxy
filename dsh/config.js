@@ -14,35 +14,57 @@ const DEFAULT_MAX_TOKENS = 32_000
 /** Node's largest usable timer delay; a longer one fires immediately. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 
-/** Claude models CLIProxyAPI exposes, when the operator configures none. */
+/**
+ * Modalities a catalog entry may declare.
+ *
+ * Only image is added here. Several Gemini models accept audio and video
+ * upstream, but this serializer resolves neither, and declaring a modality
+ * the adapter cannot send would admit input it then drops.
+ */
+const MODEL_MODALITIES = ['text', 'image']
+
+/** Text and image, for the models whose vendor documents image input. */
+const VISION = ['text', 'image']
+
+/**
+ * Claude models CLIProxyAPI exposes, when the operator configures none.
+ *
+ * Every entry here takes image input, per CLIProxyAPI's own model registry.
+ */
 const DEFAULT_CLAUDE_MODELS = [
-  { id: 'claude-fable-5', name: 'Claude Fable 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000 },
-  { id: 'claude-opus-5', name: 'Claude Opus 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000 },
-  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000 },
-  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000 },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 128_000 },
-  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 64_000 },
+  { id: 'claude-fable-5', name: 'Claude Fable 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-opus-5', name: 'Claude Opus 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 64_000, inputModalities: VISION },
 ]
 
-/** OpenAI models CLIProxyAPI exposes, when the operator configures none. */
+/**
+ * OpenAI models CLIProxyAPI exposes, when the operator configures none.
+ *
+ * `gpt-5.3-codex-spark` is text-only in that registry while every other entry
+ * takes images, so it keeps the default and is the reason modality is declared
+ * per model rather than per route.
+ */
 const DEFAULT_OPENAI_MODELS = [
-  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
-  { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
-  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
-  { id: 'gpt-5.5', name: 'GPT-5.5 (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'gpt-5.5', name: 'GPT-5.5 (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000, inputModalities: VISION },
   { id: 'gpt-5.3-codex-spark', name: 'GPT-5.3 Codex Spark (CLIProxyAPI)', contextWindow: 400_000, maxTokens: 128_000 },
 ]
 
 /** Gemini models Antigravity exposes through CLIProxyAPI. */
 const DEFAULT_GEMINI_MODELS = [
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
-  { id: 'gemini-3.6-flash-high', name: 'Gemini 3.6 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
-  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
-  { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro Low (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
-  { id: 'gemini-3-flash-agent', name: 'Gemini 3.5 Flash High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
-  { id: 'gemini-3.5-flash-low', name: 'Gemini 3.5 Flash Medium (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536 },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535 },
+  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
+  { id: 'gemini-3.6-flash-high', name: 'Gemini 3.6 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
+  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
+  { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro Low (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
+  { id: 'gemini-3-flash-agent', name: 'Gemini 3.5 Flash High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
+  { id: 'gemini-3.5-flash-low', name: 'Gemini 3.5 Flash Medium (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
 ]
 
 /** The default retry policy, matching the harness's own normal-mode defaults. */
@@ -98,8 +120,39 @@ function catalog(value, field, fallback) {
       name: typeof entry.name === 'string' && entry.name.length > 0 ? entry.name : entry.id,
       contextWindow: positiveInteger(entry.contextWindow, `${where}.contextWindow`, DEFAULT_CONTEXT_WINDOW),
       maxTokens: positiveInteger(entry.maxTokens, `${where}.maxTokens`, DEFAULT_MAX_TOKENS),
+      inputModalities: Object.freeze(modalities(entry.inputModalities, `${where}.inputModalities`)),
     }
   })
+}
+
+/**
+ * Validate one entry's declared input modalities.
+ *
+ * The default is text alone, and that asymmetry is deliberate: the two wrong
+ * answers do not cost the same. Under-claiming refuses an image before it is
+ * attached, which the operator sees immediately. Over-claiming admits an image
+ * the endpoint then rejects — after the message is durable, so the session
+ * repeats a request that cannot succeed and no model choice recovers it.
+ *
+ * @param {unknown} value - the configured array.
+ * @param {string} field - field name, for the message.
+ * @returns {string[]} the validated modalities.
+ */
+function modalities(value, field) {
+  if (value === undefined) return ['text']
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`dsh-cliproxy: ${field} must be a non-empty array`)
+  }
+  const seen = new Set()
+  for (const modality of value) {
+    if (!MODEL_MODALITIES.includes(modality)) {
+      throw new Error(`dsh-cliproxy: ${field} must contain only ${MODEL_MODALITIES.join(' and ')}`)
+    }
+    if (seen.has(modality)) throw new Error(`dsh-cliproxy: ${field} must not contain duplicates`)
+    seen.add(modality)
+  }
+  if (!seen.has('text')) throw new Error(`dsh-cliproxy: ${field} must include "text"`)
+  return [...value]
 }
 
 /**
@@ -154,6 +207,7 @@ module.exports = {
   DEFAULT_CLAUDE_MODELS,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_GEMINI_MODELS,
+  MODEL_MODALITIES,
   DEFAULT_MAX_TOKENS,
   DEFAULT_OPENAI_MODELS,
   DEFAULT_RETRY_POLICY,

@@ -1,10 +1,18 @@
 // Harness messages to CLIProxyAPI chat-completions requests.
 //
-// Text-only: image content is rejected before serialization, because the
-// flattening path below would erase it silently and the model would answer a
-// question it never saw.
+// Text and image input. An image block is a durable attachment reference, not
+// bytes: the adapter resolves it through the harness attachment service and
+// sends a transient `data:` URL, so the session log keeps the reference and
+// the request carries the pixels.
+//
+// A model whose catalog entry does not declare image input is refused before
+// serialization. Silently flattening an image away is worse than refusing it:
+// the model would answer a question it never saw.
 
 const { CliProxyError } = require('./errors.js')
+
+/** Media types the wire accepts as a data URL. */
+const SUPPORTED_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 
 /**
  * Whether any block in a message carries an image, including inside a tool
@@ -35,10 +43,109 @@ function flattenText(blocks) {
 function assertTextOnly(blocks) {
   if (contentHasImage(blocks)) {
     throw new CliProxyError(
-      'The CLIProxyAPI chat-completions adapter does not support image content.',
+      'This CLIProxyAPI model does not accept image input.',
       'UNSUPPORTED_CONTENT',
     )
   }
+}
+
+/**
+ * Reject an image in a role whose wire format cannot carry one.
+ *
+ * Only user messages take multipart content on this protocol; an image in
+ * system or assistant history would be dropped by the string path below, and
+ * it stays in the durable log, so every later turn would drop it again.
+ *
+ * @param {readonly object[]} messages - the harness conversation.
+ */
+function assertImageRoles(messages) {
+  for (const message of messages) {
+    if (message.role !== 'user' && contentHasImage(message.content)) {
+      throw new CliProxyError(
+        `This adapter cannot represent image content in a ${message.role} message.`,
+        'UNSUPPORTED_CONTENT',
+      )
+    }
+  }
+}
+
+/**
+ * Resolve one durable image reference into its transient wire part.
+ *
+ * @param {object} block - the harness image block.
+ * @param {object} attachments - the harness attachment service.
+ * @param {AbortSignal} [signal] - caller cancellation.
+ * @returns {Promise<object>} the `image_url` wire part.
+ */
+async function imagePart(block, attachments, signal) {
+  let stored
+  try {
+    stored = await attachments.readImage(block.attachment, signal)
+  } catch (error) {
+    // The attachment service owns admission; its refusal is the accurate
+    // message, and reporting it as a transport fault would send the operator
+    // looking at the network.
+    throw new CliProxyError(
+      error?.message ?? 'the attachment could not be read',
+      error?.code ?? 'UNSUPPORTED_CONTENT',
+      { cause: error },
+    )
+  }
+  const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType
+  if (!SUPPORTED_MEDIA_TYPES.includes(mediaType)) {
+    throw new CliProxyError(
+      `unsupported image media type "${String(mediaType)}"`,
+      'UNSUPPORTED_CONTENT',
+    )
+  }
+  return {
+    type: 'image_url',
+    image_url: { url: `data:${mediaType};base64,${Buffer.from(stored.data).toString('base64')}` },
+  }
+}
+
+/**
+ * Convert user or nested tool-result blocks into ordered wire parts.
+ *
+ * Order is preserved because it carries meaning: text before an image reads
+ * as an instruction about it, and text after reads as a follow-up.
+ *
+ * @param {readonly object[]} blocks - message content blocks.
+ * @param {object} attachments - the harness attachment service.
+ * @param {AbortSignal} [signal] - caller cancellation.
+ * @returns {Promise<object[]>} ordered wire parts.
+ */
+async function contentParts(blocks, attachments, signal) {
+  const parts = []
+  for (const block of blocks) {
+    if (block.type === 'text') {
+      if (block.text.length > 0) parts.push({ type: 'text', text: block.text })
+    } else if (block.type === 'image') {
+      parts.push(await imagePart(block, attachments, signal))
+    } else if (block.type === 'tool-result' && Array.isArray(block.content)) {
+      parts.push(...await contentParts(block.content, attachments, signal))
+    }
+    // Other merge-extensible blocks are not user-input vocabulary here.
+  }
+  return parts
+}
+
+/**
+ * Keep a text-only user message on the compact string form.
+ *
+ * Gateways differ in how they handle a single-element array, and the string
+ * form is what every one of them has always accepted.
+ *
+ * @param {readonly object[]} parts - ordered wire parts.
+ * @returns {string|object[]} the wire content.
+ */
+function userContent(parts) {
+  const text = []
+  for (const part of parts) {
+    if (part.type === 'image_url') return [...parts]
+    text.push(part.text)
+  }
+  return text.join('')
 }
 
 /**
@@ -72,7 +179,7 @@ function serializeAssistant(message) {
 }
 
 /**
- * Serialize the conversation.
+ * Serialize the conversation, text only.
  *
  * Tool results ride inside user messages in the harness vocabulary, but
  * chat-completions wants them as standalone `role: 'tool'` entries, so each
@@ -107,6 +214,67 @@ function serializeMessages(messages) {
       })
     }
   }
+  return wire
+}
+
+/**
+ * Serialize the conversation with image resolution.
+ *
+ * A tool result stays a string `tool` message, since the role takes no
+ * multipart content; its images follow in a user message so the model still
+ * sees them.
+ *
+ * @param {readonly object[]} messages - the harness conversation, in order.
+ * @param {object} attachments - the harness attachment service.
+ * @param {AbortSignal} [signal] - caller cancellation.
+ * @returns {Promise<object[]>} the wire messages.
+ */
+async function serializeMessagesWithImages(messages, attachments, signal) {
+  assertImageRoles(messages)
+  const wire = []
+  const pendingToolImages = []
+
+  /** Flush tool-result images before anything that is not another tool result. */
+  const flushToolImages = () => {
+    if (pendingToolImages.length === 0) return
+    wire.push({
+      role: 'user',
+      content: [{ type: 'text', text: 'Attached image(s) from tool result:' }, ...pendingToolImages],
+    })
+    pendingToolImages.length = 0
+  }
+
+  for (const message of messages) {
+    if (message.role === 'system') {
+      flushToolImages()
+      wire.push({ role: 'system', content: flattenText(message.content) })
+      continue
+    }
+    if (message.role === 'assistant') {
+      flushToolImages()
+      wire.push(serializeAssistant(message))
+      continue
+    }
+    const toolResults = message.content.filter(block => block.type === 'tool-result')
+    const ownBlocks = message.content.filter(block => block.type !== 'tool-result')
+    const parts = await contentParts(ownBlocks, attachments, signal)
+    if (parts.length > 0 || toolResults.length === 0) {
+      flushToolImages()
+      wire.push({ role: 'user', content: userContent(parts) })
+    }
+    for (const result of toolResults) {
+      const resultParts = await contentParts(result.content, attachments, signal)
+      const text = resultParts.filter(part => part.type === 'text').map(part => part.text).join('')
+      const images = resultParts.filter(part => part.type === 'image_url')
+      wire.push({
+        role: 'tool',
+        tool_call_id: result.toolCallId,
+        content: text || (images.length > 0 ? '(see attached image)' : '(no output)'),
+      })
+      pendingToolImages.push(...images)
+    }
+  }
+  flushToolImages()
   return wire
 }
 
@@ -146,17 +314,17 @@ function toJsonSchema(parameters) {
 }
 
 /**
- * Serialize one complete streaming request.
+ * Assemble the request fields shared by the text-only and image paths.
  * @param {object} options - the harness generation request.
- * @param {{maxTokens?: number}} defaults - adapter-level request defaults.
+ * @param {object[]} messages - the already-serialized wire messages.
+ * @param {{maxTokens?: number}} defaults - adapter-level defaults.
  * @returns {object} the chat-completions body.
  */
-function serializeRequest(options, defaults) {
-  const messages = serializeMessages(options.messages)
+function assembleRequest(options, messages, defaults) {
   const explicitMaxTokens = options.maxTokens ?? defaults.maxTokens
   return {
     model: options.model,
-    messages: options.system === undefined || options.system.length === 0
+    messages: options.system === undefined
       ? messages
       : [{ role: 'system', content: options.system }, ...messages],
     stream: true,
@@ -181,4 +349,35 @@ function serializeRequest(options, defaults) {
   }
 }
 
-module.exports = { contentHasImage, serializeMessages, serializeRequest, toJsonSchema }
+/**
+ * Serialize one complete text-only streaming request.
+ * @param {object} options - the harness generation request.
+ * @param {{maxTokens?: number}} defaults - adapter-level defaults.
+ * @returns {object} the chat-completions body.
+ */
+function serializeRequest(options, defaults) {
+  return assembleRequest(options, serializeMessages(options.messages), defaults)
+}
+
+/**
+ * Serialize one complete streaming request with image resolution.
+ * @param {object} options - the harness generation request.
+ * @param {{maxTokens?: number}} defaults - adapter-level defaults.
+ * @param {object} attachments - the harness attachment service.
+ * @param {AbortSignal} [signal] - caller cancellation.
+ * @returns {Promise<object>} the chat-completions body.
+ */
+async function serializeRequestWithImages(options, defaults, attachments, signal) {
+  const messages = await serializeMessagesWithImages(options.messages, attachments, signal)
+  return assembleRequest(options, messages, defaults)
+}
+
+module.exports = {
+  SUPPORTED_MEDIA_TYPES,
+  contentHasImage,
+  serializeMessages,
+  serializeMessagesWithImages,
+  serializeRequest,
+  serializeRequestWithImages,
+  toJsonSchema,
+}

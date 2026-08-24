@@ -11,7 +11,7 @@
 
 const { CliProxyError, httpErrorCode, retryAfterMs } = require('./errors.js')
 const { parseSse } = require('./sse.js')
-const { serializeRequest } = require('./serialize.js')
+const { contentHasImage, serializeRequest, serializeRequestWithImages } = require('./serialize.js')
 const { translate } = require('./translate.js')
 
 /**
@@ -74,10 +74,10 @@ function modelInfo(route, model) {
     provider: route.provider,
     id: model.id,
     name: model.name,
-    // Declaring only text is deliberate: this transport rejects images, and
-    // claiming image capability would let the host persist input the endpoint
-    // refuses on every later turn of the session.
-    inputModalities: ['text'],
+    // The catalog states this per model, not per route: one OpenAI entry is
+    // text-only while its siblings take images, and the composer gates
+    // attachment on exactly this field.
+    inputModalities: [...model.inputModalities ?? ['text']],
   }
 }
 
@@ -87,15 +87,17 @@ function modelInfo(route, model) {
  * @param {object} deps - `config` (resolved), and `resolveApiKey(config)`.
  * @returns {object} the adapter the registry accepts.
  */
-function createAdapter({ config, resolveApiKey }) {
+function createAdapter({ config, resolveApiKey, resolveAttachments }) {
   const routeOf = provider => config.routes.find(entry => entry.provider === provider)
 
   /** Open the upstream request and yield translated chunks. */
-  async function* request(options, signal, apiKey, onActivity) {
+  async function* request(options, signal, apiKey, attachments, onActivity) {
     // Serialized before the try: refusing unsupported content is a statement
     // about the request, and wrapping it in the transport's catch would report
     // an image as an unreachable endpoint.
-    const body = JSON.stringify(serializeRequest(options, { maxTokens: config.maxTokens }))
+    const body = JSON.stringify(attachments === undefined
+      ? serializeRequest(options, { maxTokens: config.maxTokens })
+      : await serializeRequestWithImages(options, { maxTokens: config.maxTokens }, attachments, signal))
     let response
     try {
       response = await fetch(`${config.baseURL}/chat/completions`, {
@@ -186,6 +188,30 @@ function createAdapter({ config, resolveApiKey }) {
     },
 
     async * stream(options) {
+      // Image capability is checked before the credential, the attachment
+      // read, and the network: a model that cannot see the image must refuse
+      // it here, while the operator can still pick another model.
+      const hasImages = options.messages.some(message => contentHasImage(message.content))
+      let attachments
+      if (hasImages) {
+        const route = routeOf(options.provider)
+        const model = route?.models.find(entry => entry.id === options.model)
+        if (model?.inputModalities?.includes('image') !== true) {
+          throw new CliProxyError(
+            `Model "${options.model}" does not accept image input.`,
+            'UNSUPPORTED_CONTENT',
+          )
+        }
+        // Resolved per request, not at load: Cordis load order must not
+        // decide whether images work for the whole process.
+        attachments = resolveAttachments?.()
+        if (attachments === undefined) {
+          throw new CliProxyError(
+            'Image input requires the durable attachment service.',
+            'UNSUPPORTED_CONTENT',
+          )
+        }
+      }
       // Facts freeze per call: an in-flight stream keeps what it started with,
       // and the next call re-reads configuration and credential.
       const apiKey = await resolveApiKey(config)
@@ -194,7 +220,13 @@ function createAdapter({ config, resolveApiKey }) {
         ? consumer.signal
         : AbortSignal.any([options.signal, consumer.signal])
       const watchdog = idleWatchdog(upstream, config.streamIdleTimeoutMs)
-      const iterator = request(options, watchdog.signal, apiKey, () => { watchdog.pulse() })[Symbol.asyncIterator]()
+      const iterator = request(
+        options,
+        watchdog.signal,
+        apiKey,
+        attachments,
+        () => { watchdog.pulse() },
+      )[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {
