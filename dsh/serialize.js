@@ -111,6 +111,41 @@ function serializeMessages(messages) {
 }
 
 /**
+ * Present tool parameters as a JSON Schema object.
+ *
+ * The harness declares a tool's parameters as a bare property map, and the
+ * Claude and OpenAI routes accept that. The Gemini/Antigravity backend
+ * validates against protobuf `Schema` instead and rejects the whole request by
+ * naming the first property as an unknown field — an error that reads like a
+ * bad tool rather than a missing wrapper. Wrapping here keeps every route on
+ * one serializer.
+ *
+ * A value already carrying `type` or `properties` is a real schema and passes
+ * through, so a correctly declared tool is never rewritten.
+ *
+ * @param {object|undefined} parameters - declared tool parameters.
+ * @returns {object} a JSON Schema object.
+ */
+function toJsonSchema(parameters) {
+  if (parameters === undefined || parameters === null) return { type: 'object', properties: {} }
+  if (typeof parameters !== 'object' || Array.isArray(parameters)) return { type: 'object', properties: {} }
+  if (Object.hasOwn(parameters, 'type') || Object.hasOwn(parameters, 'properties')) return parameters
+
+  const properties = {}
+  const required = []
+  for (const [name, declared] of Object.entries(parameters)) {
+    if (declared === null || typeof declared !== 'object') continue
+    // `required` is a per-property flag in the harness declaration and a
+    // sibling array in JSON Schema; leaving it in place makes the backend
+    // reject the property it describes.
+    const { required: isRequired, ...rest } = declared
+    properties[name] = rest
+    if (isRequired === true) required.push(name)
+  }
+  return { type: 'object', properties, ...required.length === 0 ? {} : { required } }
+}
+
+/**
  * Serialize one complete streaming request.
  * @param {object} options - the harness generation request.
  * @param {{maxTokens?: number}} defaults - adapter-level request defaults.
@@ -135,7 +170,7 @@ function serializeRequest(options, defaults) {
           function: {
             name: tool.name,
             description: tool.description,
-            parameters: tool.parameters,
+            parameters: toJsonSchema(tool.parameters),
           },
         })),
       }
@@ -146,4 +181,4 @@ function serializeRequest(options, defaults) {
   }
 }
 
-module.exports = { contentHasImage, serializeMessages, serializeRequest }
+module.exports = { contentHasImage, serializeMessages, serializeRequest, toJsonSchema }
