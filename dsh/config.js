@@ -33,9 +33,9 @@ const VISION = ['text', 'image']
  */
 const DEFAULT_CLAUDE_MODELS = [
   { id: 'claude-fable-5', name: 'Claude Fable 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
-  { id: 'claude-opus-5', name: 'Claude Opus 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
   { id: 'claude-sonnet-5', name: 'Claude Sonnet 5 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
   { id: 'claude-opus-4-8', name: 'Claude Opus 4.8 (CLIProxyAPI)', contextWindow: 1_000_000, maxTokens: 128_000, inputModalities: VISION },
+  { id: 'claude-opus-4-7', name: 'Claude Opus 4.7 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 128_000, inputModalities: VISION },
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 128_000, inputModalities: VISION },
   { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5 (CLIProxyAPI)', contextWindow: 200_000, maxTokens: 64_000, inputModalities: VISION },
 ]
@@ -57,12 +57,12 @@ const DEFAULT_OPENAI_MODELS = [
 
 /** Gemini models Antigravity exposes through CLIProxyAPI. */
 const DEFAULT_GEMINI_MODELS = [
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
   { id: 'gemini-3.6-flash-high', name: 'Gemini 3.6 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
   { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
   { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro Low (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
   { id: 'gemini-3-flash-agent', name: 'Gemini 3.5 Flash High (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
   { id: 'gemini-3.5-flash-low', name: 'Gemini 3.5 Flash Medium (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
+  { id: 'gemini-3.5-flash-extra-low', name: 'Gemini 3.5 Flash Low (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
   { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_536, inputModalities: VISION },
   { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Antigravity)', contextWindow: 1_048_576, maxTokens: 65_535, inputModalities: VISION },
 ]

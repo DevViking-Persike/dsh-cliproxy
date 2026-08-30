@@ -139,7 +139,7 @@ test('a text-only turn never touches the attachment service', async () => {
     })
 
     await collect(adapter, {
-      provider: 'cliproxy-claude', model: 'claude-opus-5',
+      provider: 'cliproxy-claude', model: 'claude-opus-4-8',
       messages: [{ role: 'user', content: [{ type: 'text', text: 'oi' }] }],
     })
 
@@ -211,7 +211,7 @@ test('resolveModel reports the same capability the composer gates on', async () 
     resolveAttachments: () => store(),
   })
 
-  const vision = await adapter.resolveModel('cliproxy-claude', 'claude-opus-5')
+  const vision = await adapter.resolveModel('cliproxy-claude', 'claude-opus-4-8')
   const textOnly = await adapter.resolveModel('cliproxy-openai', 'gpt-5.3-codex-spark')
 
   assert.deepEqual(vision.inputModalities, ['text', 'image'])

@@ -57,10 +57,10 @@ test('an unknown route rejects rather than returning an empty list', async () =>
 })
 
 test('resolveModel echoes the exact route and model', async () => {
-  const resolved = await adapter.resolveModel('cliproxy-claude', 'claude-opus-5')
+  const resolved = await adapter.resolveModel('cliproxy-claude', 'claude-opus-4-8')
 
   assert.equal(resolved.provider, 'cliproxy-claude')
-  assert.equal(resolved.id, 'claude-opus-5')
+  assert.equal(resolved.id, 'claude-opus-4-8')
   assert.ok(Number.isSafeInteger(resolved.context.contextWindow) && resolved.context.contextWindow > 0)
   assert.ok(Number.isSafeInteger(resolved.defaultMaxTokens) && resolved.defaultMaxTokens > 0)
 })
@@ -68,7 +68,7 @@ test('resolveModel echoes the exact route and model', async () => {
 test('reasoning is omitted, never sent empty', async () => {
   // An empty efforts array is rejected outright; omission means the model
   // advertises no effort and an explicit request fails with a clear code.
-  const resolved = await adapter.resolveModel('cliproxy-claude', 'claude-opus-5')
+  const resolved = await adapter.resolveModel('cliproxy-claude', 'claude-opus-4-8')
 
   assert.equal(Object.hasOwn(resolved, 'reasoning'), false)
 })
