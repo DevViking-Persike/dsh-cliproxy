@@ -5,6 +5,8 @@
 // checked at load: a misconfiguration is self-contained, so it must fail where
 // the operator can see it, not on the first model call hours later.
 
+const { existsSync } = require('node:fs')
+
 /** Idle budget between stream reads before the transport gives up. */
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Context window assumed for a model absent from the catalog. */
@@ -13,6 +15,16 @@ const DEFAULT_CONTEXT_WINDOW = 200_000
 const DEFAULT_MAX_TOKENS = 32_000
 /** Node's largest usable timer delay; a longer one fires immediately. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647
+/** Standard Homebrew locations on Apple Silicon and Intel macOS. */
+const DEFAULT_PROXY_CONFIG_PATHS = [
+  '/opt/homebrew/etc/cliproxyapi.conf',
+  '/usr/local/etc/cliproxyapi.conf',
+]
+
+/** Use the first installed Homebrew config, preserving the old fallback. */
+function defaultProxyConfigPath(fileExists = existsSync) {
+  return DEFAULT_PROXY_CONFIG_PATHS.find(fileExists) ?? DEFAULT_PROXY_CONFIG_PATHS[0]
+}
 
 /**
  * Modalities a catalog entry may declare.
@@ -177,7 +189,7 @@ function resolveConfig(raw = {}) {
   return Object.freeze({
     baseURL,
     apiKeyEnv: raw.apiKeyEnv ?? 'CLIPROXY_API_KEY',
-    proxyConfigPath: raw.proxyConfigPath ?? '/opt/homebrew/etc/cliproxyapi.conf',
+    proxyConfigPath: raw.proxyConfigPath ?? defaultProxyConfigPath(),
     readLocalProxyKey: raw.readLocalProxyKey ?? true,
     streamIdleTimeoutMs: positiveInteger(raw.streamIdleTimeoutMs, 'streamIdleTimeoutMs', DEFAULT_STREAM_IDLE_TIMEOUT_MS),
     defaultContextWindow: positiveInteger(raw.defaultContextWindow, 'defaultContextWindow', DEFAULT_CONTEXT_WINDOW),
@@ -210,8 +222,10 @@ module.exports = {
   MODEL_MODALITIES,
   DEFAULT_MAX_TOKENS,
   DEFAULT_OPENAI_MODELS,
+  DEFAULT_PROXY_CONFIG_PATHS,
   DEFAULT_RETRY_POLICY,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   MAX_TIMER_DELAY_MS,
+  defaultProxyConfigPath,
   resolveConfig,
 }

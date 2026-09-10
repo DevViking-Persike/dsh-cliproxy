@@ -23,7 +23,7 @@ Restart DSH. All three routes then appear in the model catalog.
 CLIProxyAPI 7.x already implements the public Antigravity OAuth client. Run this once:
 
 ```bash
-cliproxyapi -config /opt/homebrew/etc/cliproxyapi.conf -antigravity-login
+cliproxyapi -config "$(brew --prefix)/etc/cliproxyapi.conf" -antigravity-login
 ```
 
 Authorize the Google account in the browser. CLIProxyAPI writes `antigravity-<email>.json` under its configured `auth-dir` (normally `~/.cli-proxy-api`) and refreshes it itself. This DSH plugin never reads the Google access or refresh tokens.
@@ -44,7 +44,7 @@ Every field is optional.
 |---|---|---|
 | `baseURL` | `http://127.0.0.1:8317/v1` | Endpoint including `/v1`. |
 | `apiKeyEnv` | `CLIPROXY_API_KEY` | Optional credential reference/environment variable for the proxy access key. |
-| `proxyConfigPath` | `/opt/homebrew/etc/cliproxyapi.conf` | Local CLIProxyAPI YAML from which the first proxy access key may be read. |
+| `proxyConfigPath` | First existing standard Homebrew path | Local CLIProxyAPI YAML from which the first proxy access key may be read. The plugin checks `/opt/homebrew/etc/cliproxyapi.conf`, then `/usr/local/etc/cliproxyapi.conf`. |
 | `readLocalProxyKey` | `true` | Allow local config discovery for loopback endpoints only. |
 | `claudeModels` | six Claude entries | Catalog for `cliproxy-claude`; a supplied array replaces the default. |
 | `openaiModels` | five GPT entries | Catalog for `cliproxy-openai`. |

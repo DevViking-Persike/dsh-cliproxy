@@ -4,7 +4,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { createAdapter } = require('../dsh/adapter.js')
-const { resolveConfig } = require('../dsh/config.js')
+const { DEFAULT_PROXY_CONFIG_PATHS, defaultProxyConfigPath, resolveConfig } = require('../dsh/config.js')
 const plugin = require('../dsh/index.js')
 
 const config = resolveConfig()
@@ -54,6 +54,19 @@ test('model entries satisfy the catalog gate', async () => {
 test('an unknown route rejects rather than returning an empty list', async () => {
   await assert.rejects(adapter.listModels('nope'), err => err.code === 'INVALID_REQUEST')
   await assert.rejects(adapter.resolveModel('nope', 'm'), err => err.code === 'INVALID_REQUEST')
+})
+
+test('the local proxy config supports both standard macOS Homebrew prefixes', () => {
+  const intelPath = '/usr/local/etc/cliproxyapi.conf'
+  const existing = new Set([intelPath])
+
+  assert.deepEqual(DEFAULT_PROXY_CONFIG_PATHS, [
+    '/opt/homebrew/etc/cliproxyapi.conf',
+    intelPath,
+  ])
+  assert.equal(defaultProxyConfigPath(path => existing.has(path)), intelPath)
+  assert.equal(defaultProxyConfigPath(() => false), '/opt/homebrew/etc/cliproxyapi.conf')
+  assert.equal(resolveConfig({ proxyConfigPath: '/custom/config.yaml' }).proxyConfigPath, '/custom/config.yaml')
 })
 
 test('resolveModel echoes the exact route and model', async () => {
