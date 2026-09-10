@@ -187,6 +187,13 @@ function createAdapter({ config, resolveApiKey, resolveAttachments }) {
       })
     },
 
+    async prepareCall(provider, model, signal) {
+      return {
+        model: await this.resolveModel(provider, model, signal),
+        stream: options => this.stream(options),
+      }
+    },
+
     async * stream(options) {
       // Image capability is checked before the credential, the attachment
       // read, and the network: a model that cannot see the image must refuse
