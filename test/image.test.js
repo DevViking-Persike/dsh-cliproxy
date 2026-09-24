@@ -194,7 +194,7 @@ test('tool-result images follow their string tool message', async () => {
 
 test('the catalog states image capability per model', async () => {
   const adapter = createAdapter({
-    config: resolveConfig(),
+    config: resolveConfig({ discoverModels: false }),
     resolveApiKey: () => Promise.resolve('k'),
     resolveAttachments: () => store(),
   })

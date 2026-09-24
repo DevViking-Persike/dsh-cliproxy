@@ -13,6 +13,7 @@ const { CliProxyError, httpErrorCode, retryAfterMs } = require('./errors.js')
 const { parseSse } = require('./sse.js')
 const { contentHasImage, serializeRequest, serializeRequestWithImages } = require('./serialize.js')
 const { translate } = require('./translate.js')
+const { discoverModels } = require('./models.js')
 
 /**
  * A deadline that resets on activity rather than bounding the whole stream.
@@ -161,12 +162,25 @@ function createAdapter({ config, resolveApiKey, resolveAttachments }) {
       return config.retryPolicy
     },
 
-    listModels(provider) {
+    imageRequestPricing(_provider, _model) {
+      return undefined
+    },
+
+    /** Bind metadata and dispatch without reading credentials or contacting the proxy. */
+    async prepareCall(provider, model, signal) {
+      const stream = this.stream.bind(this)
+      return { model: await this.resolveModel(provider, model, signal), stream }
+    },
+
+    async listModels(provider, signal) {
       const route = routeOf(provider)
       if (route === undefined) {
         return Promise.reject(new CliProxyError(`unknown CLIProxyAPI route "${provider}"`, 'INVALID_REQUEST'))
       }
-      return Promise.resolve(route.models.map(model => modelInfo(route, model)))
+      const models = config.discoverModels
+        ? await discoverModels(config, route, await resolveApiKey(config), signal)
+        : route.models
+      return models.map(model => modelInfo(route, model))
     },
 
     resolveModel(provider, model) {

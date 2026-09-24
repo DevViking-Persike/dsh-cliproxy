@@ -7,7 +7,7 @@ const { createAdapter } = require('../dsh/adapter.js')
 const { resolveConfig } = require('../dsh/config.js')
 const plugin = require('../dsh/index.js')
 
-const config = resolveConfig()
+const config = resolveConfig({ discoverModels: false })
 const adapter = createAdapter({ config, resolveApiKey: () => Promise.resolve('k') })
 
 test('provider metadata passes the registry gate for every route', () => {

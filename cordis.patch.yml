@@ -1,8 +1,7 @@
 # dsh bundle layer: mount the CLIProxyAPI adapter.
 #
-# Registering costs nothing until a model call selects one of these routes:
-# the endpoint and key resolve per request, so a proxy that is not running
-# fails that call rather than blocking startup.
+# Registration does not contact the proxy. Catalog requests discover available
+# models; dispatch resolves credentials again for each call.
 - insert:
     - id: dsh-cliproxy
       name: 'dsh-cliproxy'

@@ -170,12 +170,23 @@ function resolveConfig(raw = {}) {
   if (!/^https?:\/\//.test(baseURL)) {
     throw new Error('dsh-cliproxy: baseURL must be an http(s) URL')
   }
+  const enabledRoutes = raw.routes ?? ['claude', 'openai', 'gemini']
+  if (!Array.isArray(enabledRoutes) || enabledRoutes.length === 0
+    || enabledRoutes.some(route => !['claude', 'openai', 'gemini'].includes(route))
+    || new Set(enabledRoutes).size !== enabledRoutes.length) {
+    throw new Error('dsh-cliproxy: routes must contain unique claude, openai, or gemini entries')
+  }
+  if (raw.discoverModels !== undefined && typeof raw.discoverModels !== 'boolean') {
+    throw new Error('dsh-cliproxy: discoverModels must be a boolean')
+  }
   const retryPolicy = raw.retryPolicy === undefined
     ? DEFAULT_RETRY_POLICY
     : { ...DEFAULT_RETRY_POLICY, ...raw.retryPolicy }
 
   return Object.freeze({
     baseURL,
+    discoverModels: raw.discoverModels ?? true,
+    modelDiscoveryTimeoutMs: positiveInteger(raw.modelDiscoveryTimeoutMs, 'modelDiscoveryTimeoutMs', 10_000),
     apiKeyEnv: raw.apiKeyEnv ?? 'CLIPROXY_API_KEY',
     proxyConfigPath: raw.proxyConfigPath ?? '/opt/homebrew/etc/cliproxyapi.conf',
     readLocalProxyKey: raw.readLocalProxyKey ?? true,
@@ -185,21 +196,30 @@ function resolveConfig(raw = {}) {
     retryPolicy: Object.freeze(retryPolicy),
     routes: Object.freeze([
       Object.freeze({
+        id: 'claude',
+        catalogConfigured: raw.claudeModels !== undefined,
+        modelPrefix: 'claude-',
         provider: 'cliproxy-claude',
         displayName: 'CLIProxyAPI (Claude)',
         models: Object.freeze(catalog(raw.claudeModels, 'claudeModels', DEFAULT_CLAUDE_MODELS)),
       }),
       Object.freeze({
+        id: 'openai',
+        catalogConfigured: raw.openaiModels !== undefined,
+        modelPrefix: 'gpt-',
         provider: 'cliproxy-openai',
         displayName: 'CLIProxyAPI (OpenAI)',
         models: Object.freeze(catalog(raw.openaiModels, 'openaiModels', DEFAULT_OPENAI_MODELS)),
       }),
       Object.freeze({
+        id: 'gemini',
+        catalogConfigured: raw.geminiModels !== undefined,
+        modelPrefix: 'gemini-',
         provider: 'cliproxy-gemini',
-        displayName: 'Gemini (Antigravity subscription)',
+        displayName: 'Gemini (AGY / Antigravity)',
         models: Object.freeze(catalog(raw.geminiModels, 'geminiModels', DEFAULT_GEMINI_MODELS)),
       }),
-    ]),
+    ].filter(route => enabledRoutes.includes(route.id))),
   })
 }
 

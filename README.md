@@ -16,11 +16,13 @@ The Gemini route uses your Google/Antigravity account — **not a Gemini API key
 dsh plugin --profile web add github:DevViking-Persike/dsh-cliproxy
 ```
 
-Restart DSH. All three routes then appear in the model catalog.
+Restart DSH. The enabled routes query `/v1/models` when the Harness requests their catalogs, so only models currently exposed by your proxy appear. Installing the plugin does not perform OAuth login.
 
-## Gemini / Antigravity Login
+When Claude and Codex already come from `dsh-subscriptions`, enable only `routes: [gemini]` here to avoid presenting alternative proxy routes for the same model families.
 
-CLIProxyAPI 7.x already implements the public Antigravity OAuth client. Run this once:
+## Gemini / AGY (Antigravity) Login
+
+CLIProxyAPI owns [Antigravity OAuth login](https://help.router-for.me/configuration/provider/antigravity). Run this once:
 
 ```bash
 cliproxyapi -config /opt/homebrew/etc/cliproxyapi.conf -antigravity-login
@@ -42,6 +44,9 @@ Every field is optional.
 
 | Field | Default | Meaning |
 |---|---|---|
+| `routes` | `[claude, openai, gemini]` | Provider families to register. Use `[gemini]` alongside `dsh-subscriptions`. |
+| `discoverModels` | `true` | Query the authenticated `/v1/models` endpoint for available model ids. Set `false` for an explicitly managed offline catalog. |
+| `modelDiscoveryTimeoutMs` | `10000` | Deadline for each catalog request. |
 | `baseURL` | `http://127.0.0.1:8317/v1` | Endpoint including `/v1`. |
 | `apiKeyEnv` | `CLIPROXY_API_KEY` | Optional credential reference/environment variable for the proxy access key. |
 | `proxyConfigPath` | `/opt/homebrew/etc/cliproxyapi.conf` | Local CLIProxyAPI YAML from which the first proxy access key may be read. |
@@ -59,31 +64,55 @@ Every field is optional.
   name: dsh-cliproxy
   config:
     baseURL: http://127.0.0.1:8317/v1
+    routes: [gemini]
     geminiModels:
       - id: gemini-pro-agent
         name: Gemini 3.1 Pro High
         contextWindow: 1048576
         maxTokens: 65535
+        inputModalities: [text, image]
 ```
 
-## Why the Proxy Owns Antigravity
+## Discovery and Routing
 
-A direct client is significantly more than an OAuth bearer token. The upstream wire requires:
+The proxy's [OpenAI model endpoint](https://github.com/router-for-me/CLIProxyAPI/blob/main/sdk/api/handlers/openai/openai_handlers.go) exposes available ids, not context windows or image capabilities. This plugin attaches configured metadata for known ids. New ids with the route's `claude-`, `gpt-`, or `gemini-` prefix appear as text-only with the configured default context and output limits. Custom aliases must be listed in the corresponding model catalog. An explicit catalog restricts discovery to its listed ids; it does not advertise configured models absent from the proxy response. Catalog errors remain visible and do not silently fall back to potentially unavailable models.
 
-- Google OAuth scopes and the registered Antigravity public client;
-- project discovery/onboarding through `loadCodeAssist`;
-- `daily-cloudcode-pa.googleapis.com` / `cloudcode-pa.googleapis.com` routing;
-- an `antigravity/hub/<version>` user agent and HTTP/1.1 fingerprint;
-- a Gemini body nested inside an Antigravity envelope with project, request, and session ids;
-- tool-schema sanitization, encrypted reasoning replay, model-specific output caps, and token refresh.
+The Gemini route identifies a model family, not an authenticated Google account. CLIProxyAPI chooses the backend and account; configure it to serve Gemini through Antigravity if that is the intended credential source. Account eligibility and quotas remain controlled by Google. No Google OAuth client secret, access token, or refresh token is bundled with this plugin. Existing Claude/Codex authentication remains in `dsh-subscriptions` when that plugin is used.
 
-CLIProxyAPI already owns and tests those facts. Duplicating them here would produce two token writers and a second independently drifting protocol implementation. This plugin therefore sends OpenAI-compatible streaming requests to the loopback proxy and never copies Google's client secret or account tokens.
+## Pin Gemini to Antigravity
+
+`routes: [gemini]` selects the Harness model family; it does not select a backend account. If the proxy also serves Gemini through other providers, create a unique alias under its Antigravity OAuth channel, as supported by the [CLIProxyAPI configuration](https://github.com/router-for-me/CLIProxyAPI/blob/main/config.example.yaml):
+
+```yaml
+# CLIProxyAPI configuration, not cordis.yml:
+oauth-model-alias:
+  antigravity:
+    - name: gemini-pro-agent
+      alias: agy-gemini-pro
+      fork: true
+```
+
+Then select only that alias in the Harness plugin configuration:
+
+```yaml
+routes: [gemini]
+geminiModels:
+  - id: agy-gemini-pro
+    name: Gemini Pro (AGY / Antigravity)
+    contextWindow: 1048576
+    maxTokens: 65535
+    inputModalities: [text, image]
+```
+
+Keep the alias exclusive to Antigravity across all proxy providers. Model ids and limits must match the upstream model actually exposed by your installation. Discovery will list the alias only after CLIProxyAPI exposes it. This configuration is an operator example; installing this plugin does not rewrite your proxy configuration or initiate login.
 
 ## Model Experience
 
 The adapter is transparent to the model: it registers provider routes and streams responses, adding no tool, prompt section, or context. Usage counts are disjoint — `inputTokens` excludes cache reads already counted inside `prompt_tokens`.
 
-Text only. Image, audio, and video are refused before a request is sent, although some Antigravity models support them upstream; this adapter's serializer does not yet preserve those inputs.
+Text and image input are supported for catalog entries declaring image capability. Images resolve through the Harness attachment service and are serialized as data URLs. Unknown models default to text-only; audio and video are refused.
+
+The adapter implements `prepareCall()` without reading credentials or querying the catalog. Dispatch retains the prepared adapter and reads the proxy access key only when the stream starts. Image request pricing is unspecified, so the Harness uses its neutral estimate.
 
 ## Safety
 
@@ -91,12 +120,12 @@ Text only. Image, audio, and video are refused before a request is sent, althoug
 - The proxy access key is read per request and never enters an error or log. Local-config discovery is disabled automatically for non-loopback destinations.
 - A truncated stream raises `STREAM_CLOSED` instead of looking complete.
 - `retry-after` reaches the harness retry plugin; idle timeout measures server silence, never a slow consumer.
-- Chunk fields are checked at load against a fixed payload, so harness protocol drift refuses to mount instead of corrupting tool calls silently.
+- Chunk fields are checked at load against this adapter's expected payload vocabulary. This self-check does not negotiate the installed Harness version; compatibility must also be verified against the target Harness.
 
 ## Known Limitations
 
-- Model catalogs are static defaults copied from CLIProxyAPI's Antigravity registry; an uncatalogued model still resolves when named explicitly. Supplying `geminiModels` replaces the defaults.
-- No image/audio/video serialization yet.
+- Discovery reflects the proxy catalog at the time it is requested; availability can change before dispatch. An uncatalogued model still resolves when named explicitly, with default limits and text-only input.
+- No audio/video serialization. Image support requires both configured model capability and the Harness attachment service.
 - The plugin has no settings-directory entry; it is configured by `cordis.yml`.
 - Tests use local HTTP servers and recorded harness translator/serializer output. Real OAuth and model availability remain vendor-controlled.
 
@@ -106,7 +135,7 @@ Text only. Image, audio, and video are refused before a request is sent, althoug
 npm install && node --test test/*.test.js
 ```
 
-64 tests, no network and no credential required.
+The suite uses temporary loopback HTTP servers; no provider credentials or vendor network access are required. Discovery tests cover account-visible ids, configured aliases, route selection, authentication errors, cancellation, and prepared dispatch.
 
 ## License
 
