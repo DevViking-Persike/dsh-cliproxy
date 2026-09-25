@@ -81,6 +81,14 @@ test('an uncatalogued model resolves as text-only', async () => {
   assert.equal(resolved.context.contextWindow, config.defaultContextWindow)
 })
 
+test('prepareCall returns the model and stream function required by DSH', async () => {
+  const prepared = await adapter.prepareCall('cliproxy-openai', 'gpt-5.4')
+
+  assert.equal(prepared.model.provider, 'cliproxy-openai')
+  assert.equal(prepared.model.id, 'gpt-5.4')
+  assert.equal(typeof prepared.stream, 'function')
+})
+
 test('the plugin registers all three routes through an effect, and unload removes them', async () => {
   const registered = []
   let disposer
